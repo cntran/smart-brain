@@ -7,6 +7,8 @@ import Register from './components/Register/Register';
 import Logo from './components/Logo/Logo';
 import ImageLinkForm from './components/ImageLinkForm/ImageLinkForm';
 import Rank from './components/Rank/Rank';
+import Modal from './components/Modal/Modal';
+import Profile from './components/Profile/Profile';
 import './App.css';
 
 const particlesOptions = {
@@ -28,12 +30,15 @@ const initialState = {
   box: {},
   route: 'signin',
   isSignedIn: false,
+  isProfileOpen: false,
   user: {
     id: '',
     name: '',
     email: '',
     entries: 0,
-    joined: ''
+    joined: '',
+    pet: '',
+    age: ''
   }
 }
 
@@ -41,6 +46,28 @@ class App extends Component {
   constructor() {
     super();
     this.state = initialState;
+  }
+
+  componentDidMount() {
+    const token = window.localStorage.getItem('token');
+   
+    if (token) {
+      fetch('http://localhost:3000/signin', {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data && data.id) {
+          this.getUser(data.id)
+        }
+        
+      })
+      .catch(console.log)
+    }
   }
 
   loadUser = (data) => {
@@ -51,6 +78,24 @@ class App extends Component {
       entries: data.entries,
       joined: data.joined
     }})
+  }
+
+  getUser = (id) => {
+    const token = window.localStorage.getItem('token');
+    fetch(`http://localhost:3000/profile/${id}`, {
+      method: 'get',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      }
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.id) {
+          this.loadUser(data)
+          this.onRouteChange('home');
+        }
+      })
   }
 
   calculateFaceLocation = (data) => {
@@ -75,10 +120,15 @@ class App extends Component {
   }
 
   onButtonSubmit = () => {
+
+    const token = window.localStorage.getItem('token');
     this.setState({imageUrl: this.state.input});
       fetch('http://localhost:3000/imageurl', {
         method: 'post',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token
+        },
         body: JSON.stringify({
           input: this.state.input
         })
@@ -88,7 +138,10 @@ class App extends Component {
         if (response) {
           fetch('http://localhost:3000/image', {
             method: 'put',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token
+            },
             body: JSON.stringify({
               id: this.state.user.id
             })
@@ -107,24 +160,37 @@ class App extends Component {
 
   onRouteChange = (route) => {
     if (route === 'signout') {
-      this.setState(initialState)
+      return this.setState(initialState)
     } else if (route === 'home') {
       this.setState({isSignedIn: true})
     }
     this.setState({route: route});
   }
 
+  toggleModal = () => {
+    this.setState(prevState => ({
+      ...prevState,
+      isProfileOpen: !prevState.isProfileOpen
+    }));
+  }
+
   render() {
-    const { isSignedIn, imageUrl, route, box } = this.state;
+    const { isSignedIn, imageUrl, route, box, isProfileOpen } = this.state;
     return (
       <div className="App">
          <Particles className='particles'
           params={particlesOptions}
         />
-        <Navigation isSignedIn={isSignedIn} onRouteChange={this.onRouteChange} />
+        <Navigation isSignedIn={isSignedIn} onRouteChange={this.onRouteChange} 
+          toggleModal={this.toggleModal} />
         { route === 'home'
           ? <div>
               <Logo />
+              { isProfileOpen && 
+                <Modal>
+                  <Profile user={this.state.user} isProfileOpen={isProfileOpen} toggleModal={this.toggleModal} loadUser={this.loadUser} />
+                </Modal>
+              }
               <Rank
                 name={this.state.user.name}
                 entries={this.state.user.entries}
@@ -137,7 +203,7 @@ class App extends Component {
             </div>
           : (
              route === 'signin'
-             ? <Signin loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
+             ? <Signin loadUser={this.loadUser} getUser={this.getUser} onRouteChange={this.onRouteChange}/>
              : <Register loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
             )
         }
